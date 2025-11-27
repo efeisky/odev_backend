@@ -2,10 +2,10 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from app.controllers.general_controller import get_all_users_for_project
 from app.controllers.log_controller import log_message
-from app.model.project_model import SetMemberModel, SetManagerModel, SetProjectModel, ChangeRoleModel, UnAuthorizeUserModel
+from app.model.project_model import SetMemberModel, SetManagerModel, SetProjectModel, ChangeRoleModel, UnAuthorizeUserModel, EditProjectModel
 from typing import List, Literal, Optional
 from app.controllers.authentication_controller import set_member, set_manager
-from app.controllers.project_controller import get_project_constants, get_project_users, set_project, change_role, unauthorize_user, delete_project, get_members, change_status, get_projects, get_project_detail
+from app.controllers.project_controller import edit_project, get_project_constants, get_project_users, set_project, change_role, unauthorize_user, delete_project, get_members, change_status, get_projects, get_project_detail
 from datetime import date
 
 router = APIRouter(prefix="/project", tags=["Project"])
@@ -187,4 +187,41 @@ async def getProjectUsers(project_code: str = Query(...)):
         "data": {
             "users": result
         }
+    }
+
+class Item(BaseModel):
+    id: int
+    name: str
+class ExtraUser(BaseModel):
+    code: str
+    full_name: str
+    role: str
+class UpdateProjectRequest(BaseModel):
+    project_code: str
+    edited_by: str
+    definition: str
+    startDate: str
+    endDate: str
+    managerId: str
+    priorities: List[Item]
+    statuses: List[Item]
+    types: List[Item]
+    extraUsers: List[ExtraUser]
+
+@router.put("/editProject")
+async def editProject(data: UpdateProjectRequest):
+    log_message(
+        user_code=data.edited_by,
+        message=f"{data.project_code} projesi için düzenleme yaptı."
+    )
+    print(data.model_dump())
+    model = EditProjectModel(data.model_dump())
+    result = edit_project(model)
+
+    if result is False:
+        return {"status": False, "message": "Unable to update task"}
+    
+    return {
+        "status": True, 
+        "data": result
     }

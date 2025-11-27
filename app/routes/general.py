@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from app.controllers.general_controller import get_all_users_for_project, get_all_users_for_admin, delete_user, edit_activation_user, get_user_logs, update_user
+from app.controllers.general_controller import get_all_users_for_project, get_all_users_for_admin, delete_user, edit_activation_user, get_user_logs, update_user, get_dashboard
 from app.model.user_model import UpdateUserModel
 router = APIRouter(prefix="/general", tags=["General"])
 
@@ -74,4 +74,17 @@ async def get_logs(user_code: str = Query(...)):
         "data": {
             "logs": result
         }
+    }
+
+
+@router.get("/dashboard")
+async def getDashboard(user_code: str = Query(...)):
+    result = get_dashboard(user_code)
+    if result is False:
+        return {"status": False, "message": "Unable to fetch dashboard"}
+    
+    return {
+        "status": True,
+        "message": "Dashboard has got.",
+        "data": result
     }

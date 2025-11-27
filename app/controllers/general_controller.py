@@ -206,3 +206,131 @@ def update_user(data: UpdateUserModel):
             conn.close()
         except Exception:
             pass
+
+def get_dashboard(user_code: str):
+    conn, cur = get_connection()
+    if conn is None:
+        return False
+
+    try:
+        # Kullanıcı adı
+        cur.execute("""
+            SELECT name || ' ' || surname AS full_name
+            FROM users
+            WHERE code = %s
+        """, (user_code,))
+        user_row = cur.fetchone()
+        full_name = user_row[0] if user_row else "Bilinmeyen Kullanıcı"
+
+        # Son 5 log
+        cur.execute("""
+            SELECT message
+            FROM logs
+            WHERE owner_code = %s
+            ORDER BY created_at DESC
+            LIMIT 5
+        """, (user_code,))
+        logs_rows = cur.fetchall()
+        logs = [row[0] for row in logs_rows]
+
+        # Görev sayıları
+        cur.execute("""
+            WITH user_tasks AS (
+                SELECT DISTINCT
+                    t.id,
+                    t.start_date,
+                    t.end_date
+                FROM tasks t
+                LEFT JOIN tasks_assignment ta ON t.id = ta.task_id
+                WHERE t.created_by = %s
+                   OR ta.user_code = %s
+            )
+            SELECT
+                'all_count' AS kategori,
+                COUNT(*) AS sayi
+            FROM user_tasks
+
+            UNION ALL
+
+            SELECT
+                'finished_count' AS kategori,
+                COUNT(*) AS sayi
+            FROM user_tasks
+            WHERE end_date < CURRENT_DATE
+
+            UNION ALL
+
+            SELECT
+                'nearly_count' AS kategori,
+                COUNT(*) AS sayi
+            FROM user_tasks
+            WHERE start_date >= CURRENT_DATE
+              AND start_date <= CURRENT_DATE + INTERVAL '7 days'
+
+            UNION ALL
+
+            SELECT
+                'ongoing_count' AS kategori,
+                COUNT(*) AS sayi
+            FROM user_tasks
+            WHERE start_date <= CURRENT_DATE
+              AND end_date >= CURRENT_DATE;
+        """, (user_code, user_code))
+        tasks_rows = cur.fetchall()
+        tasks_counts = {row[0]: row[1] for row in tasks_rows}
+
+        # Tarihe göre görev listesi
+        cur.execute("""
+            WITH user_tasks AS (
+                SELECT DISTINCT
+                    t.id,
+                    t.title,
+                    t.start_date,
+                    t.end_date
+                FROM tasks t
+                LEFT JOIN tasks_assignment ta ON t.id = ta.task_id
+                WHERE t.created_by = %s
+                   OR ta.user_code = %s
+            ),
+            events AS (
+                SELECT DISTINCT start_date AS event_date, title || ' görevinin başlangıç tarihi' AS description
+                FROM user_tasks
+                WHERE start_date IS NOT NULL
+                UNION ALL
+                SELECT DISTINCT end_date AS event_date, title || ' görevinin bitiş tarihi' AS description
+                FROM user_tasks
+                WHERE end_date IS NOT NULL
+            )
+            SELECT
+                event_date,
+                ARRAY_AGG(description ORDER BY description) AS tasks
+            FROM events
+            GROUP BY event_date
+            ORDER BY event_date;
+        """, (user_code, user_code))
+        tasks_by_date_rows = cur.fetchall()
+
+        # Tarihe göre dict oluştur
+        from collections import OrderedDict
+        tasks_by_date = OrderedDict()
+        for row in tasks_by_date_rows:
+            date_str = row[0].strftime("%Y-%m-%d")
+            tasks_by_date[date_str] = row[1]
+
+        # Dashboard verisi
+        dashboard_data = {
+            "full_name": full_name,
+            "logs": logs,
+            "tasks_counts": tasks_counts,
+            "tasks_by_date": tasks_by_date
+        }
+
+        return dashboard_data
+
+    except Exception as e:
+        print("Query error:", e)
+        return False
+
+    finally:
+        cur.close()
+        conn.close()

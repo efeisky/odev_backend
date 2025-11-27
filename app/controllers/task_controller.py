@@ -848,7 +848,17 @@ def update_task(model: EditTaskFullModel):
             """, (model.task_id, desc, model.user_code))
             subtask_id = cur.fetchone()[0]
 
-            for member in model.assigned_members:
+            incoming_subtask = next(
+                (s for s in model.subtasks_raw if s.subtask_id == subtask_id),
+                None
+            )
+
+            if incoming_subtask is None:
+                users = set()
+            else:
+                users = set(member.code for member in incoming_subtask.assigned_members)
+
+            for member in users:
                 cur.execute("""
                     INSERT INTO task_detail_assignment (detail_task_id, assigned_user, timestamp)
                     VALUES (%s, %s, NOW())
@@ -863,21 +873,32 @@ def update_task(model: EditTaskFullModel):
                 FROM task_detail_assignment
                 WHERE detail_task_id = %s
             """, (subtask_id,))
-            current_members = set([member.code for member in model.assigned_members])
-            new_members = set([member.code for member in model.assigned_members])
+            current_members = set(row[0] for row in cur.fetchall())
 
-            for member_code in current_members - new_members:
-                cur.execute("""
-                    DELETE FROM task_detail_assignment
-                    WHERE detail_task_id = %s AND user_code = %s
-                """, (subtask_id, member_code))
+            incoming_subtask = next(
+                (s for s in model.subtasks_raw if s.subtask_id == subtask_id),
+                None
+            )
 
-            for member_code in new_members - current_members:
-                cur.execute("""
-                    INSERT INTO task_detail_assignment (detail_task_id, user_code, assigned_at, assigned_by)
-                    VALUES (%s, %s, NOW(), %s)
-                """, (subtask_id, member_code, model.user_code))
+            if incoming_subtask is None:
+                new_members = set()
+            else:
+                new_members = set(member.code for member in incoming_subtask.assigned_members)
 
+            for user_code in current_members:
+                if user_code not in new_members:
+                    cur.execute("""
+                        DELETE FROM task_detail_assignment
+                        WHERE detail_task_id = %s AND assigned_user = %s
+                    """, (subtask_id, user_code))
+
+            # Eklenmesi gerekenler
+            for user_code in new_members:
+                if user_code not in current_members:
+                    cur.execute("""
+                        INSERT INTO task_detail_assignment (detail_task_id, assigned_user, assigned_at)
+                        VALUES (%s, %s, NOW())
+                    """, (subtask_id, user_code))
         # Commit
         conn.commit()
         return True

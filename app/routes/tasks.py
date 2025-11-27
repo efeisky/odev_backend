@@ -194,7 +194,7 @@ class TaskEditModel(BaseModel):
 async def completeEdit(data: TaskEditModel):
     log_message(
         user_code=data.edited_by,
-        message=f"{data.task_id} için düzenleme yaptı."
+        message=f"{data.task_id} kodlu görev için düzenleme yaptı."
     )
     model = EditTaskFullModel(
         user_code=data.edited_by,

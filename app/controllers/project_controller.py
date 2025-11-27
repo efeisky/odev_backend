@@ -1,4 +1,4 @@
-from app.model.project_model import SetProjectModel, ChangeRoleModel, UnAuthorizeUserModel
+from app.model.project_model import EditProjectModel, SetProjectModel, ChangeRoleModel, UnAuthorizeUserModel
 from app.db.connection import get_connection
 from psycopg2 import sql
 
@@ -77,8 +77,6 @@ def set_project(model: SetProjectModel) -> bool:
             conn.close()
         except Exception:
             pass
-
-
 
 def change_role(model: ChangeRoleModel) -> bool:
     conn, cur = get_connection()
@@ -460,3 +458,157 @@ def get_project_users(project_code: str):
     finally:
         if conn:
             conn.close()
+
+def edit_project(model: EditProjectModel):
+    conn, cur = get_connection()
+    if conn is None:
+        return False
+
+    try:
+        # Transaction başlat
+        conn.autocommit = False
+
+        cur.execute("""
+            UPDATE projects
+            SET
+                date_start = %s,
+                date_end = %s,
+                manager_code = %s,
+                definition = %s
+            WHERE code = %s
+        """, (
+            model.startDate,
+            model.endDate,
+            model.managerId,
+            model.definition,
+            model.project_code
+        ))
+
+        cur.execute("""
+            SELECT user_code, project_role 
+            FROM members
+            WHERE project_code = %s
+        """, (model.project_code,))
+        
+        rows = cur.fetchall()
+        old_users = {r[0]: r[1] for r in rows}
+
+        new_users_dict = {u["code"]: u["role"] for u in model.extra_users}
+
+        to_insert = set(new_users_dict.keys()) - set(old_users.keys())
+
+        for code in to_insert:
+            cur.execute("""
+                INSERT INTO members (project_code, user_code, project_role)
+                VALUES (%s, %s, %s)
+            """, (model.project_code, code, new_users_dict[code]))
+
+        to_delete = set(old_users.keys()) - set(new_users_dict.keys())
+
+        for code in to_delete:
+            cur.execute("""
+                DELETE FROM members
+                WHERE project_code = %s AND user_code = %s
+            """, (model.project_code, code))
+
+        to_update = [
+            code for code in new_users_dict
+            if code in old_users and new_users_dict[code] != old_users[code]
+        ]
+
+        for code in to_update:
+            cur.execute("""
+                UPDATE members
+                SET project_role = %s
+                WHERE project_code = %s AND user_code = %s
+            """, (new_users_dict[code], model.project_code, code))
+
+        cur.execute("""
+            SELECT definition
+            FROM task_status
+            WHERE project_code = %s
+        """, (model.project_code,))
+        
+        rows = cur.fetchall()
+        old_statuses = set(r[0] for r in rows)
+
+        new_statuses = set(s["name"] for s in model.statuses)
+
+        to_insert = new_statuses - old_statuses
+        for definition in to_insert:
+            cur.execute("""
+                INSERT INTO task_status (project_code, definition)
+                VALUES (%s, %s)
+            """, (model.project_code, definition))
+
+        to_delete = old_statuses - new_statuses
+        for definition in to_delete:
+            cur.execute("""
+                DELETE FROM task_status
+                WHERE project_code = %s AND definition = %s
+            """, (model.project_code, definition))
+
+
+        cur.execute("""
+            SELECT definition
+            FROM task_type
+            WHERE project_code = %s
+        """, (model.project_code,))
+        
+        rows = cur.fetchall()
+        old_types = set(r[0] for r in rows)
+
+        new_types = set(s["name"] for s in model.types)
+
+        to_insert = new_types - old_types
+        for definition in to_insert:
+            cur.execute("""
+                INSERT INTO task_type (project_code, definition)
+                VALUES (%s, %s)
+            """, (model.project_code, definition))
+
+        to_delete = old_types - new_types
+        for definition in to_delete:
+            cur.execute("""
+                DELETE FROM task_type
+                WHERE project_code = %s AND definition = %s
+            """, (model.project_code, definition))
+
+        cur.execute("""
+            SELECT definition
+            FROM task_priorities
+            WHERE project_code = %s
+        """, (model.project_code,))
+        
+        rows = cur.fetchall()
+        old_priorities = set(r[0] for r in rows)
+
+        new_priorities = set(s["name"] for s in model.priorities)
+
+        to_insert = new_priorities - old_priorities
+        for definition in to_insert:
+            cur.execute("""
+                INSERT INTO task_priorities (project_code, definition)
+                VALUES (%s, %s)
+            """, (model.project_code, definition))
+
+        to_delete = old_priorities - new_priorities
+        for definition in to_delete:
+            cur.execute("""
+                DELETE FROM task_priorities
+                WHERE project_code = %s AND definition = %s
+            """, (model.project_code, definition))
+        # Commit
+        conn.commit()
+        return True
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print("Query error:", e)
+        return False
+
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+    

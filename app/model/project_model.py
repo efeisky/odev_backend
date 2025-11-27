@@ -83,3 +83,35 @@ class UnAuthorizeUserModel:
     def __init__(self, project_code: str, user_code: str):
         self.project_code = project_code
         self.user_code = user_code
+
+
+class AdditionalItem:
+    id: str
+    name: str
+class AdditionalUser:
+    code: str
+    full_name: str
+    role: str
+class EditProjectModel:
+    project_code: str
+    edited_by: str
+    definition: str
+    startDate: str
+    endDate: str
+    managerId: str
+    priorities: List[AdditionalItem]
+    statuses: List[AdditionalItem]
+    types: List[AdditionalItem]
+    extra_users: List[AdditionalUser]
+    def __init__(self, data: dict):
+        self.project_code = data["project_code"]
+        self.edited_by = data["edited_by"]
+        self.definition = data["definition"]
+        self.startDate = data["startDate"]
+        self.endDate = data["endDate"]
+        self.managerId = data["managerId"]
+        self.priorities = data["priorities"]
+        self.statuses = data["statuses"]
+        self.types = data["types"]
+        self.extra_users = data["extraUsers"]
+
