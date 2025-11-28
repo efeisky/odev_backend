@@ -214,7 +214,6 @@ async def editProject(data: UpdateProjectRequest):
         user_code=data.edited_by,
         message=f"{data.project_code} projesi için düzenleme yaptı."
     )
-    print(data.model_dump())
     model = EditProjectModel(data.model_dump())
     result = edit_project(model)
 
