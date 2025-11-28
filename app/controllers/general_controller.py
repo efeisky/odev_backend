@@ -264,7 +264,7 @@ def get_dashboard(user_code: str):
                 'nearly_count' AS kategori,
                 COUNT(*) AS sayi
             FROM user_tasks
-            WHERE start_date >= CURRENT_DATE
+            WHERE start_date > CURRENT_DATE
               AND start_date <= CURRENT_DATE + INTERVAL '7 days'
 
             UNION ALL
