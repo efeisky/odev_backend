@@ -233,6 +233,37 @@ def get_dashboard(user_code: str):
         logs_rows = cur.fetchall()
         logs = [row[0] for row in logs_rows]
 
+        cur.execute("""
+        WITH user_tasks AS (
+            SELECT DISTINCT
+                t.id,
+                t.title,
+                t.start_date,
+                t.end_date
+            FROM tasks t
+            LEFT JOIN tasks_assignment ta ON t.id = ta.task_id
+            WHERE t.created_by = %s
+            OR ta.user_code = %s
+        )
+        SELECT
+            title,
+            (start_date - CURRENT_DATE) AS days_left
+        FROM user_tasks
+        WHERE start_date > CURRENT_DATE
+        AND start_date <= CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY start_date ASC
+        LIMIT 10;
+        """, (user_code, user_code))
+
+        near_tasks_rows = cur.fetchall()
+        near_tasks = [
+            {
+                "title": row[0],
+                "days_left": int(row[1])
+            }
+            for row in near_tasks_rows
+        ]
+
         # Görev sayıları
         cur.execute("""
             WITH user_tasks AS (
@@ -322,7 +353,8 @@ def get_dashboard(user_code: str):
             "full_name": full_name,
             "logs": logs,
             "tasks_counts": tasks_counts,
-            "tasks_by_date": tasks_by_date
+            "tasks_by_date": tasks_by_date,
+            "near_tasks": near_tasks
         }
 
         return dashboard_data
